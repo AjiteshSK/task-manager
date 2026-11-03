@@ -16,6 +16,10 @@ export default defineConfig(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      // Allow unused parameters that start with _, e.g. the `next` in Express error handlers
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
   // Plain JS files (like this one) are not part of the TypeScript project
   { files: ['**/*.js'], extends: [tseslint.configs.disableTypeChecked] },
