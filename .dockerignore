@@ -1,0 +1,13 @@
+# Recreated inside the image
+**/node_modules
+**/dist
+
+# Secrets never enter the build context; configuration comes from runtime environment variables
+**/.env
+**/.env.*
+
+# Not needed for the build
+.git
+.github
+**/coverage
+**/*.log
