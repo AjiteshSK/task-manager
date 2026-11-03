@@ -3,9 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    globalSetup: ['./tests/global-setup.ts'],
     setupFiles: ['./tests/setup.ts'],
-    // The first run downloads a MongoDB binary for mongodb-memory-server
-    hookTimeout: 120_000,
+    // Each test file starts its own in-memory MongoDB, which can be slow on a busy CI runner
+    hookTimeout: 30_000,
     // env.ts validates these at import time. The real database connection comes from
     // the in-memory MongoDB started in tests/setup.ts, so MONGODB_URI is never used.
     env: {
