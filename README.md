@@ -306,10 +306,19 @@ The build script installs devDependencies explicitly (`npm ci --include=dev`). W
 
 ## What I chose not to implement
 
-1. Password reset and email verification: these need an email provider and secure token flows.
-2. Google/social login: email and password meet the requirement, and OAuth adds provider setup and callback handling.
-3. Sharing tasks between users: this would turn single-owner data into a permissions system.
+1. **Sharing tasks between users.** Every task has exactly one owner, so authorization is a single rule: a query only ever sees the logged-in user's tasks. Sharing would add roles, invitations and per-task permissions, which is security-sensitive work I didn't want to rush.
+2. **Real-time updates (WebSockets).** Each user manages their own tasks, and the client already refetches after every change. A WebSocket server would add infrastructure and connection handling for little benefit.
+3. **Reminders and notifications.** These need a background job scheduler and an email or push provider, and they aren't needed to create and manage tasks.
 
 ## Known limitation
 
-The JWT is stored in localStorage, so any script on the page could read it if an XSS bug existed, and a token can't be revoked before it expires. Next step: httpOnly, SameSite cookies with short-lived access tokens and rotating refresh tokens.
+Authentication is built in-house: email and password, with an HS256 JWT that the client keeps in localStorage.
+
+- Any script running on the page could read the token if an XSS bug ever got in.
+- A token stays valid until it expires, even after the user logs out or changes their password. Deleting the account does stop it, because the auth middleware checks that the user still exists.
+- There's no password reset, email verification or multi-factor authentication.
+
+With one more day, I'd fix this in two steps:
+
+1. **OAuth 2.0 / OpenID Connect with an identity provider** such as Auth0 or Keycloak. The provider handles sign-up, login, password reset, email verification, MFA and brute-force protection, so the app no longer stores passwords at all.
+2. **A backend-for-frontend (BFF).** Express runs the authorization code flow with PKCE and keeps the tokens on the server. The browser only gets an httpOnly, Secure, SameSite session cookie, with CSRF protection on requests that change data. No token is reachable from JavaScript, and sessions can be revoked on the server. Because Express already serves the React app from the same origin, the cookie works without any CORS changes.
