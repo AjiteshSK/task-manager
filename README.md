@@ -24,7 +24,7 @@ The free hosting plan sleeps when idle, so the first request after a while can t
 | ------------------ | ----------- |
 | `demo@example.com` | `Demo@1234` |
 
-`npm run seed --prefix server` creates this account with 8 sample tasks. Running it again resets the account.
+`npm run seed --prefix server` creates this account with 8 sample tasks. With Docker, run `docker compose run --rm app node dist/scripts/seed.js` instead. Running the seed again resets the account.
 
 ## Tech stack
 
@@ -33,14 +33,14 @@ The free hosting plan sleeps when idle, so the first request after a while can t
 | Client  | React 19, Vite 8, React Router 8, TanStack Query 5, React Hook Form 7 + Zod 4, Tailwind CSS 4, Sonner (toasts)     |
 | Server  | Node.js 26, Express 5, MongoDB with Mongoose 9, Zod 4, JSON Web Tokens, Argon2id, Helmet, express-rate-limit, Pino |
 | Testing | Vitest 5, React Testing Library, MSW 3 (client); Supertest, mongodb-memory-server (server)                         |
-| Tooling | TypeScript 6 (strict), ESLint 10 + typescript-eslint, Prettier, GitHub Actions                                     |
+| Tooling | TypeScript 6 (strict), ESLint 10 + typescript-eslint, Prettier, GitHub Actions, Docker + Docker Compose            |
 
 TypeScript is on 6.0 rather than 7 because typescript-eslint doesn't support TypeScript 7 yet.
 
 ## Architecture overview
 
 ```
-                 production: one Express app on one URL
+                 production: one Docker image, one Express app, one URL
 Browser ───────► Express (server/)
                   ├── /api/*       routes → validation → controllers → services → MongoDB
                   └── other GETs   the React build in client/dist (index.html for client routes)
@@ -125,11 +125,40 @@ npm run dev                          # client: http://localhost:5173  API: http:
 
 In development, Vite proxies `/api` to the Express server, so the browser only talks to one origin and no CORS setup is needed.
 
-> On Linux kernels 6.19 and newer, the official `mongo:8` Docker image exits at startup ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). Use Atlas or a native MongoDB install instead.
+## Running with Docker
+
+The `Dockerfile` builds one production image in which Express serves both the API and the built React app. `docker-compose.yml` runs that image with a local MongoDB, so the production build runs with one command. Requirements: Docker with Compose v2.
+
+```bash
+cp server/.env.example server/.env                      # then set JWT_SECRET
+docker compose up --build -d                            # builds the image, starts MongoDB, then the app
+docker compose run --rm app node dist/scripts/seed.js   # optional: the demo account
+```
+
+Open http://localhost:5000 and log in with the [demo account](#demo-login). `docker compose down` stops everything; add `-v` to also delete the database. To build only the image, run `docker build -t task-manager .`.
+
+**The image:**
+
+- **Multi-stage build**: the client and the server each install their dependencies and build in their own stage. The final stage contains only the server's production dependencies and the two `dist` folders, with no TypeScript sources or dev tools.
+- **Layer caching**: dependencies are installed from the lockfiles before the source code is copied, so a code-only change reuses the cached `npm ci` layers.
+- **Runtime**:
+  - Runs as the non-root `node` user with `NODE_ENV=production`.
+  - Starts with `node dist/server.js` rather than `npm start`, so SIGTERM reaches the app and it shuts down cleanly.
+  - A `HEALTHCHECK` calls `/api/health`.
+- **No secrets** are built in. All configuration comes from environment variables when the container starts.
+
+**Compose:**
+
+- **Configuration**: the app reads `JWT_SECRET` and `JWT_EXPIRES_IN` from `server/.env`, the same file `npm run dev` uses. Compose sets `MONGODB_URI` (the `mongo` service), `NODE_ENV=production` and `PORT=5000` itself.
+- **Startup order**: the app starts only after MongoDB's healthcheck passes.
+- **Ports**: the app is published on `127.0.0.1:5000` only, and MongoDB's port isn't published at all.
+- **Data**: MongoDB keeps its data in the `mongo-data` volume, so it survives restarts.
+- **Compose vs `npm run dev`**: Compose is for running the production build locally; `npm run dev` is still the development workflow. Both use port 5000, so stop one before starting the other.
+- **MongoDB version**: Compose uses `mongo:9`. The `mongo:8` images refuse to start on Linux kernels 6.19 to 7.0.13 ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)); MongoDB 9 starts normally on them.
 
 ## Environment variables
 
-These belong to the server (`server/.env` locally, or the host's settings in production). The client needs none.
+These belong to the server (`server/.env` locally, which Docker Compose also reads, or the host's settings in production). The client needs none.
 
 | Variable         | Required | Default       | Notes                                                    |
 | ---------------- | -------- | ------------- | -------------------------------------------------------- |
@@ -154,7 +183,7 @@ From the repo root:
 | Script              | What it does                                                              |
 | ------------------- | ------------------------------------------------------------------------- |
 | `npm run dev`       | Runs the server and the client together (concurrently)                    |
-| `npm run build`     | Installs and builds the client, then the server (also used by Render)     |
+| `npm run build`     | Installs and builds the client, then the server                           |
 | `npm start`         | Starts the built server, which also serves the built client in production |
 | `npm test`          | Runs the server's and the client's tests                                  |
 | `npm run lint`      | ESLint and a Prettier formatting check, for both apps                     |
@@ -171,7 +200,7 @@ Run them with `--prefix server` or `--prefix client`.
 
 - **Server**: 72 integration tests against an in-memory MongoDB. They cover auth, validation, protected routes, the full task CRUD flow, filtering, sorting and pagination, profile changes, and that users can't read, change or delete each other's tasks.
 - **Client**: tests with React Testing Library and MSW. They cover login validation and server errors, route guards (including logout on a 401), creating a task, and rolling back a failed optimistic status change.
-- **CI**: GitHub Actions runs lint, typecheck and tests for both apps on every push and pull request.
+- **CI**: on every push and pull request, GitHub Actions runs lint, typecheck and tests for both apps and builds the Docker image.
 
 ## API reference
 
@@ -227,9 +256,9 @@ All endpoints are under `/api` and use JSON. Endpoints marked 🔒 need an `Auth
 | 413    | Request body over 20 KB                                    |
 | 429    | Too many login, register or password-change attempts       |
 
-## Deployment (Render + MongoDB Atlas)
+## Deployment (Render + Docker + MongoDB Atlas)
 
-The whole app deploys as one Render web service. Express serves both the API and the React build.
+The whole app deploys as one Render web service built from the `Dockerfile`, the same image that runs locally. Express serves both the API and the React build.
 
 1. **Create the database on MongoDB Atlas.**
    1. Create a free cluster.
@@ -237,21 +266,32 @@ The whole app deploys as one Render web service. Express serves both the API and
    3. Under **Network Access**, allow `0.0.0.0/0`. Render's free plan has no fixed outbound IP addresses.
    4. Copy the connection string and add a database name, e.g. `mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/task-manager`.
 2. **Create a Web Service on Render** from this repository:
-   - **Runtime**: Node. Render picks Node 26 from `.nvmrc` and `engines`.
+   - **Language**: Docker.
    - **Root directory**: leave empty (the repo root).
-   - **Build command**: `npm run build`
-   - **Start command**: `npm start`
+   - **Dockerfile path**: `./Dockerfile` (the default).
+   - **Build and start commands**: none. Render builds the image and runs its `CMD`.
    - **Health check path**: `/api/health`
    - **Instance type**: Free.
-3. **Set the environment variables**: `MONGODB_URI`, `JWT_SECRET` (at least 32 characters) and `NODE_ENV=production`. Render sets `PORT`.
-   - The build script installs devDependencies explicitly (`npm ci --include=dev`). With `NODE_ENV=production`, npm would otherwise skip Vite and TypeScript, and the build would fail.
-4. **Seed the demo account (optional)** by running the seed locally against Atlas:
+3. **Set the environment variables**: `MONGODB_URI` and `JWT_SECRET` (at least 32 characters). The image already sets `NODE_ENV=production`, and Render sets `PORT`, which the server listens on.
+   - These are read only when the container starts. Render passes environment variables into a Docker build only for build arguments the Dockerfile declares with `ARG`, and this Dockerfile declares none, so secrets never end up in the image.
+4. **Seed the demo account (optional).** Render's free plan has no shell, so run the seed from your machine against Atlas, using the image:
 
    ```bash
-   MONGODB_URI="<atlas connection string>" JWT_SECRET="<any 32+ characters>" npm run seed --prefix server
+   docker build -t task-manager .
+   docker run --rm -e MONGODB_URI="<atlas connection string>" -e JWT_SECRET="<any 32+ characters>" task-manager node dist/scripts/seed.js
    ```
 
+   Without Docker: `MONGODB_URI="<atlas connection string>" JWT_SECRET="<any 32+ characters>" npm run seed --prefix server`.
+
 5. **Open the service URL** and update [Live URL](#live-url) above.
+
+**Without Docker**, Render's Node runtime also works:
+
+- **Build command**: `npm run build`
+- **Start command**: `npm start`
+- **Environment**: also set `NODE_ENV=production`. Render picks Node 26 from `.nvmrc` and `engines`.
+
+The build script installs devDependencies explicitly (`npm ci --include=dev`). With `NODE_ENV=production`, npm would otherwise skip Vite and TypeScript, and the build would fail.
 
 **Notes:**
 
@@ -262,7 +302,7 @@ The whole app deploys as one Render web service. Express serves both the API and
 
 1. TypeScript end to end, with Zod validating every request and the environment at runtime. Types are checked at compile time, and bad input is rejected as soon as it reaches the server.
 2. Stateless JWT auth with ownership enforced on the server. Every task query is scoped to the user, and other users' tasks return 404.
-3. One repo and one deployment. Express serves the React build, so there's a single URL and no CORS configuration.
+3. One repo, one container: a multi-stage Docker build packages the API and the React app together, so there's a single URL, no CORS configuration, and the same image runs locally and in production.
 
 ## What I chose not to implement
 
