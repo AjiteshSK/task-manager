@@ -8,12 +8,10 @@ export function StatusSelect({ task }: { task: Task }) {
 
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="text-slate-700">
-        Status
-        {/* Screen readers hear "Status of <title>", since every task has one of these */}
-        <span className="sr-only"> of {task.title}</span>
-      </span>
+      <span className="text-slate-700">Status</span>
       <select
+        // Every task has one of these, so screen readers hear "Status of <title>"
+        aria-label={`Status of ${task.title}`}
         className={`${inputClassName} w-auto py-1`}
         value={task.status}
         onChange={(event) => {
