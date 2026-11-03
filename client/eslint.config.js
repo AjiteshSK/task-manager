@@ -24,6 +24,12 @@ export default defineConfig(
     rules: {
       // Allow unused parameters that start with _
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // Allow async handlers in JSX, e.g. <form onSubmit={handleSubmit(onSubmit)}>;
+      // React Hook Form handles the returned promise
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
+      ],
     },
   },
   // Plain JS files (like this one) are not part of the TypeScript project
