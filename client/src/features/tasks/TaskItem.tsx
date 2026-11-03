@@ -1,6 +1,14 @@
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { getErrorMessage } from '../../lib/api-client';
 import { formatDueDate, isOverdue } from '../../lib/dates';
 import type { Task } from '../../lib/types';
-import { PRIORITY_LABELS, STATUS_LABELS } from './task-labels';
+import { useDeleteTask } from './queries';
+import { StatusSelect } from './StatusSelect';
+import { PRIORITY_LABELS } from './task-labels';
+import { TaskFormDialog } from './TaskFormDialog';
 
 const priorityStyles = {
   high: 'bg-red-50 text-red-800 ring-red-200',
@@ -9,7 +17,21 @@ const priorityStyles = {
 };
 
 export function TaskItem({ task }: { task: Task }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const deleteTask = useDeleteTask();
   const overdue = isOverdue(task);
+
+  // mutateAsync rather than mutate(…, { onSuccess }): the refetch after deleting removes this
+  // component, and callbacks passed to mutate() don't run once it has unmounted
+  async function handleDelete() {
+    try {
+      await deleteTask.mutateAsync(task.id);
+      toast.success('Task deleted');
+    } catch (error) {
+      toast.error(`Couldn't delete the task. ${getErrorMessage(error)}`);
+    }
+  }
 
   return (
     <li
@@ -17,37 +39,67 @@ export function TaskItem({ task }: { task: Task }) {
         overdue ? 'border-red-300' : 'border-slate-200'
       }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <h3
-          className={`font-medium break-words ${task.status === 'done' ? 'text-slate-600 line-through' : ''}`}
+          className={`min-w-0 font-medium break-words ${task.status === 'done' ? 'text-slate-600 line-through' : ''}`}
         >
           {task.title}
         </h3>
-        <span className="text-xs text-slate-700">{STATUS_LABELS[task.status]}</span>
+        <StatusSelect task={task} />
       </div>
 
       {task.description && (
         <p className="text-sm whitespace-pre-line text-slate-700">{task.description}</p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span
-          className={`rounded-full px-2 py-0.5 font-medium ring-1 ${priorityStyles[task.priority]}`}
-        >
-          {PRIORITY_LABELS[task.priority]} priority
-        </span>
-        {task.dueDate && (
-          <span className={overdue ? 'font-medium text-red-700' : 'text-slate-700'}>
-            Due {formatDueDate(task.dueDate)}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className={`rounded-full px-2 py-0.5 font-medium ring-1 ${priorityStyles[task.priority]}`}
+          >
+            {PRIORITY_LABELS[task.priority]} priority
           </span>
-        )}
-        {/* Text, not just the red border, so the state doesn't rely on color */}
-        {overdue && (
-          <span className="rounded-full bg-red-700 px-2 py-0.5 font-medium text-white">
-            Overdue
-          </span>
-        )}
+          {task.dueDate && (
+            <span className={overdue ? 'font-medium text-red-700' : 'text-slate-700'}>
+              Due {formatDueDate(task.dueDate)}
+            </span>
+          )}
+          {/* Text, not just the red border, so the state doesn't rely on color */}
+          {overdue && (
+            <span className="rounded-full bg-red-700 px-2 py-0.5 font-medium text-white">
+              Overdue
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            aria-label={`Edit ${task.title}`}
+            onClick={() => setIsEditing(true)}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="secondary"
+            aria-label={`Delete ${task.title}`}
+            onClick={() => setIsConfirmingDelete(true)}
+          >
+            Delete
+          </Button>
+        </div>
       </div>
+
+      <TaskFormDialog open={isEditing} onClose={() => setIsEditing(false)} task={task} />
+      <ConfirmDialog
+        open={isConfirmingDelete}
+        title="Delete task?"
+        description={`"${task.title}" will be permanently deleted.`}
+        confirmLabel="Delete task"
+        isPending={deleteTask.isPending}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setIsConfirmingDelete(false)}
+      />
     </li>
   );
 }

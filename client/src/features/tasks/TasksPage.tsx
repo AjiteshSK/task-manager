@@ -5,12 +5,14 @@ import { ErrorState } from '../../components/ErrorState';
 import { Pagination } from './Pagination';
 import { useTasks } from './queries';
 import { TaskFilters } from './TaskFilters';
+import { TaskFormDialog } from './TaskFormDialog';
 import { TaskList, TaskListSkeleton } from './TaskList';
 import { useTaskFilters } from './use-task-filters';
 
 export function TasksPage() {
   const { params, hasFilters, setFilter, setPage, clearFilters } = useTaskFilters();
   const tasksQuery = useTasks(params);
+  const [isCreating, setIsCreating] = useState(false);
   // Changing the key remounts TaskFilters, which resets its search box after "Clear filters"
   const [filtersKey, setFiltersKey] = useState(0);
 
@@ -53,7 +55,13 @@ export function TasksPage() {
         />
       );
     }
-    return <EmptyState title="No tasks yet" description="Create your first task to get started." />;
+    return (
+      <EmptyState
+        title="No tasks yet"
+        description="Create your first task to get started."
+        action={<Button onClick={() => setIsCreating(true)}>Create a task</Button>}
+      />
+    );
   }
 
   return (
@@ -68,6 +76,7 @@ export function TasksPage() {
             </p>
           )}
         </div>
+        <Button onClick={() => setIsCreating(true)}>New task</Button>
       </div>
 
       <section aria-label="Filters" className="flex flex-col gap-3">
@@ -89,6 +98,8 @@ export function TasksPage() {
       </section>
 
       <Pagination page={params.page} totalPages={totalPages} onPageChange={setPage} />
+
+      <TaskFormDialog open={isCreating} onClose={() => setIsCreating(false)} />
     </div>
   );
 }
