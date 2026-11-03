@@ -29,7 +29,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 }
 
 /** The logged-in user's id, for handlers that run after requireAuth. */
-export function getUserId(req: Request): string {
+export function getUserId(req: Pick<Request, 'userId'>): string {
   if (!req.userId) {
     throw new HttpError(401, 'Authentication required');
   }
