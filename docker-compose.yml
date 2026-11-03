@@ -1,0 +1,33 @@
+# Runs the production image with a local MongoDB. For development, use `npm run dev`.
+name: task-manager
+
+services:
+  app:
+    build: .
+    image: task-manager
+    ports:
+      # Bound to localhost so the app isn't reachable from other machines on the network
+      - "127.0.0.1:5000:5000"
+    # JWT_SECRET and JWT_EXPIRES_IN come from the same file `npm run dev` uses
+    env_file: server/.env
+    # These override server/.env, whose values are for npm run dev
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/task-manager
+      NODE_ENV: production
+      PORT: 5000
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:9
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mongo-data:
