@@ -43,12 +43,13 @@ function toHttpError(err: unknown): HttpError {
     return new HttpError(401, 'Invalid or expired token');
   }
 
-  // express.json() errors carry a 4xx status: malformed JSON (400) or body too large (413)
+  // express.json() errors have a `type` such as "entity.parse.failed" and a 4xx status:
+  // 400 for malformed JSON, 413 for a body over the size limit
   if (
     err instanceof Error &&
+    'type' in err &&
     'status' in err &&
     typeof err.status === 'number' &&
-    err.status >= 400 &&
     err.status < 500
   ) {
     return new HttpError(err.status, err.message);

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import express from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
@@ -21,6 +22,19 @@ app.use(pinoHttp({ logger }));
 app.use(express.json({ limit: '20kb' }));
 
 app.use('/api', apiRouter);
+
+if (env.NODE_ENV === 'production') {
+  // Unknown /api routes get a JSON 404 here instead of falling through to index.html
+  app.use('/api', notFound);
+
+  // Resolves to the same folder from src/ (tsx) and dist/ (compiled): both are in server/
+  const clientDist = path.resolve(import.meta.dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+  // The React app handles its own routes (e.g. /tasks), so any other GET gets index.html
+  app.get('/{*splat}', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 app.use(notFound);
 app.use(errorHandler);
