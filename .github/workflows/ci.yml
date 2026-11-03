@@ -30,3 +30,11 @@ jobs:
       - run: npm run typecheck
       # The server's tests download a MongoDB binary for mongodb-memory-server on first run
       - run: npm test
+
+  docker:
+    name: docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Builds every stage, so a broken Dockerfile or build step fails CI. Nothing is pushed.
+      - run: docker build --tag task-manager .
