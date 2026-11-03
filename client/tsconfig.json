@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "module": "esnext",
+    // Vite resolves imports, so they don't need file extensions
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    // TypeScript 6 no longer includes every @types package by default
+    "types": ["vite/client"],
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
+}
