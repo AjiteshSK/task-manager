@@ -85,4 +85,40 @@ export const handlers = [
     db.tasks.unshift(task);
     return HttpResponse.json(task, { status: 201 });
   }),
+
+  http.patch<{ id: string }, Partial<Task>>('/api/tasks/:id', async ({ request, params }) => {
+    if (!isLoggedIn(request)) {
+      return errorResponse(401, 'Authentication required');
+    }
+    const task = db.tasks.find((item) => item.id === params.id);
+    if (!task) {
+      return errorResponse(404, 'Task not found');
+    }
+    Object.assign(task, await request.json(), { updatedAt: new Date().toISOString() });
+    return HttpResponse.json(task);
+  }),
+
+  http.delete<{ id: string }>('/api/tasks/:id', ({ request, params }) => {
+    if (!isLoggedIn(request)) {
+      return errorResponse(401, 'Authentication required');
+    }
+    db.tasks = db.tasks.filter((item) => item.id !== params.id);
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];
+
+/** A task with sensible defaults, for tests that need existing tasks. */
+export function makeTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: `task-${db.tasks.length + 1}`,
+    title: 'Sample task',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    dueDate: null,
+    userId: testUser.id,
+    createdAt: '2026-11-01T10:00:00.000Z',
+    updatedAt: '2026-11-01T10:00:00.000Z',
+    ...overrides,
+  };
+}
