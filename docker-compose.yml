@@ -23,6 +23,9 @@ services:
     image: mongo:9
     volumes:
       - mongo-data:/data/db
+    ports:
+      # Localhost only: this database has no password
+      - "127.0.0.1:27017:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
